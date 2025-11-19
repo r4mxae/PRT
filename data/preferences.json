@@ -1,0 +1,11 @@
+{
+  "showWelcome": true,
+  "defaultFilter": {
+    "type": "all",
+    "critical": "all"
+  },
+  "notifications": {
+    "sound": false,
+    "reminders": true
+  }
+}

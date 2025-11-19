@@ -1,0 +1,26 @@
+{
+  "tasks": [
+    {
+      "id": "demo-project",
+      "type": "project",
+      "name": "Launch plan",
+      "reference": "PRJ-900",
+      "description": "Map deliverables, owners, and deadlines.",
+      "isCritical": true,
+      "elapsedMs": 0,
+      "logs": [],
+      "lastLog": null
+    },
+    {
+      "id": "demo-task",
+      "type": "task",
+      "name": "Write kickoff brief",
+      "reference": "Task #001",
+      "description": "Provide a one page overview for the team.",
+      "isCritical": false,
+      "elapsedMs": 0,
+      "logs": [],
+      "lastLog": null
+    }
+  ]
+}

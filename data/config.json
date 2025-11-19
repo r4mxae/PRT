@@ -1,0 +1,8 @@
+{
+  "taskCounterKey": "offline-worklog-counter",
+  "exportFileName": "worklog-export.csv",
+  "theme": {
+    "mode": "system",
+    "accent": "teal"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "storageKey": "offline-worklog",
+  "autosave": true,
+  "timerInterval": 1000,
+  "locale": "en-US"
+}
