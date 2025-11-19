@@ -1,0 +1,11 @@
+{
+  "codex": [
+    "Summarize the work completed today.",
+    "List blockers for the next session.",
+    "Draft an email update for stakeholders."
+  ],
+  "assistant": {
+    "tone": "concise",
+    "format": "markdown"
+  }
+}

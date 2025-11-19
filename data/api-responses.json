@@ -1,0 +1,11 @@
+{
+  "profile": {
+    "name": "Offline Operator",
+    "role": "Owner",
+    "timezone": "UTC"
+  },
+  "shortcuts": [
+    { "label": "Start next critical task", "action": "startCritical" },
+    { "label": "Export latest project", "action": "exportLatest" }
+  ]
+}

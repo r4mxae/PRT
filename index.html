@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Offline Worklog Dashboard</title>
+    <link rel="stylesheet" href="assets/css/styles.css" />
+</head>
+<body>
+    <div class="app-shell">
+        <header class="app-header">
+            <div class="branding">
+                <div class="badge">Offline</div>
+                <h1>Project &amp; Task Worklog</h1>
+                <p class="tagline">Track projects, tasks, timers, and progress without an internet connection.</p>
+            </div>
+            <div class="header-stats" id="headerStats">
+                <div class="stat-card">
+                    <span class="stat-label">Active Timers</span>
+                    <strong class="stat-value" data-stat="running">0</strong>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Total Projects</span>
+                    <strong class="stat-value" data-stat="projects">0</strong>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Total Tasks</span>
+                    <strong class="stat-value" data-stat="tasks">0</strong>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-label">Logged Hours</span>
+                    <strong class="stat-value" data-stat="hours">0h 00m</strong>
+                </div>
+            </div>
+        </header>
+
+        <main>
+            <section class="panel">
+                <div class="panel-heading">
+                    <div>
+                        <h2>Create a project or task</h2>
+                        <p>Add criticality, reference numbers, and auto-generated task IDs.</p>
+                    </div>
+                </div>
+                <form class="grid-form" id="taskForm">
+                    <label class="form-field">
+                        <span>Type</span>
+                        <div class="pill-group">
+                            <label>
+                                <input type="radio" name="itemType" value="project" checked />
+                                <span>Project</span>
+                            </label>
+                            <label>
+                                <input type="radio" name="itemType" value="task" />
+                                <span>Task</span>
+                            </label>
+                        </div>
+                    </label>
+
+                    <label class="form-field">
+                        <span>Name</span>
+                        <input type="text" name="name" placeholder="E.g. Redesign website" required />
+                    </label>
+
+                    <label class="form-field" data-field="projectRef">
+                        <span>Project reference</span>
+                        <input type="text" name="reference" placeholder="E.g. PRJ-042" />
+                    </label>
+
+                    <label class="form-field" data-field="taskCode" hidden>
+                        <span>Task number</span>
+                        <input type="text" name="taskCode" readonly />
+                    </label>
+
+                    <label class="form-field">
+                        <span>Critical</span>
+                        <div class="pill-group">
+                            <label>
+                                <input type="radio" name="critical" value="yes" />
+                                <span>Critical</span>
+                            </label>
+                            <label>
+                                <input type="radio" name="critical" value="no" checked />
+                                <span>Normal</span>
+                            </label>
+                        </div>
+                    </label>
+
+                    <label class="form-field stretch">
+                        <span>Description (optional)</span>
+                        <textarea name="description" rows="2" placeholder="Add more context about this work item"></textarea>
+                    </label>
+
+                    <div class="form-actions">
+                        <button type="reset" class="ghost">Clear</button>
+                        <button type="submit" class="primary">Add to dashboard</button>
+                    </div>
+                </form>
+            </section>
+
+            <section class="panel">
+                <div class="panel-heading">
+                    <div>
+                        <h2>Dashboard</h2>
+                        <p>Start/stop timers, capture logs, and export Excel-ready files.</p>
+                    </div>
+                    <div class="filters">
+                        <select id="filterType">
+                            <option value="all">All types</option>
+                            <option value="project">Projects only</option>
+                            <option value="task">Tasks only</option>
+                        </select>
+                        <select id="filterCritical">
+                            <option value="all">All priorities</option>
+                            <option value="critical">Critical</option>
+                            <option value="normal">Normal</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="table" id="taskTable">
+                    <!-- Rows injected by JavaScript -->
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <dialog id="logDialog">
+        <form method="dialog" id="logForm">
+            <h3>Log your progress</h3>
+            <p class="dialog-subtitle">Add a comment to keep the tracked time.</p>
+            <div class="dialog-body">
+                <p class="dialog-timer" id="dialogTimer">00:00:00</p>
+                <label class="form-field stretch">
+                    <span>Progress log</span>
+                    <textarea name="logComment" rows="3" placeholder="Summarize what you accomplished"></textarea>
+                </label>
+                <p class="warning" id="logWarning">Leaving this empty will discard the time for this session.</p>
+            </div>
+            <div class="dialog-actions">
+                <button type="button" class="ghost" id="discardLog">Discard time</button>
+                <button type="submit" class="primary">Save log</button>
+            </div>
+        </form>
+    </dialog>
+
+    <template id="taskRowTemplate">
+        <article class="task-row" data-id="">
+            <div class="task-type" data-field="type"></div>
+            <div class="task-meta">
+                <h3 data-field="name"></h3>
+                <p class="ref" data-field="reference"></p>
+                <p class="desc" data-field="description"></p>
+                <div class="chips">
+                    <span class="chip critical" data-field="critical"></span>
+                    <span class="chip status" data-field="status"></span>
+                </div>
+            </div>
+            <div class="task-time">
+                <p class="time" data-field="elapsed">00:00:00</p>
+                <small data-field="lastLog"></small>
+            </div>
+            <div class="task-actions">
+                <button class="ghost" data-action="logs">Logs</button>
+                <button class="primary" data-action="start">Start</button>
+                <button class="warn" data-action="stop" disabled>Stop</button>
+                <button class="ghost" data-action="export">Export</button>
+            </div>
+            <div class="task-logs" hidden>
+                <h4>Session log</h4>
+                <ul></ul>
+            </div>
+        </article>
+    </template>
+
+    <script type="application/json" id="bootstrap-data"></script>
+    <script src="assets/js/app.js" defer></script>
+</body>
+</html>
