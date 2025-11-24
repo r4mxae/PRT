@@ -60,11 +60,13 @@
                     <label class="form-field">
                         <span>Name</span>
                         <input type="text" name="name" placeholder="E.g. Redesign website" required />
+                        <p class="form-note" id="duplicateNameNote" hidden></p>
                     </label>
 
                     <label class="form-field" data-field="projectRef">
                         <span>Project reference</span>
                         <input type="text" name="reference" placeholder="E.g. PRJ-042" />
+                        <p class="form-note" id="duplicateReferenceNote" hidden></p>
                     </label>
 
                     <label class="form-field" data-field="taskCode" hidden>
@@ -115,6 +117,12 @@
                             <option value="critical">Critical</option>
                             <option value="normal">Normal</option>
                         </select>
+                        <select id="sortBy">
+                            <option value="recent">Sort by last update</option>
+                            <option value="critical">Sort by criticality</option>
+                            <option value="type">Sort by type</option>
+                            <option value="name">Sort by name</option>
+                        </select>
                     </div>
                 </div>
                 <div class="table" id="taskTable">
@@ -153,17 +161,22 @@
                 <div class="chips">
                     <span class="chip critical" data-field="critical"></span>
                     <span class="chip status" data-field="status"></span>
+                    <span class="chip duplicate" data-field="duplicateName" hidden>Duplicate title</span>
+                    <span class="chip duplicate" data-field="duplicateReference" hidden>Duplicate reference</span>
+                    <span class="chip review" data-field="checked"></span>
                 </div>
             </div>
             <div class="task-time">
                 <p class="time" data-field="elapsed">00:00:00</p>
                 <small data-field="lastLog"></small>
+                <small data-field="lastUpdated"></small>
             </div>
             <div class="task-actions">
                 <button class="ghost" data-action="logs">Logs</button>
                 <button class="primary" data-action="start">Start</button>
                 <button class="warn" data-action="stop" disabled>Stop</button>
                 <button class="ghost" data-action="export">Export</button>
+                <button class="ghost" data-action="check">Mark checked</button>
             </div>
             <div class="task-logs" hidden>
                 <h4>Session log</h4>
