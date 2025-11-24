@@ -42,11 +42,69 @@ const defaultData = {
                 elapsedMs: 0,
                 logs: [],
                 isRunning: false,
+                isArchived: false,
                 lastLog: null,
+                createdAt: Date.now(),
+                lastUpdatedMs: Date.now(),
+                lastChecked: null,
             },
         ],
     },
 };
+
+function normalizeTask(task) {
+    const now = Date.now();
+    const createdAt = Number.isFinite(task.createdAt) ? task.createdAt : now;
+    const lastUpdatedMs = Number.isFinite(task.lastUpdatedMs) ? task.lastUpdatedMs : createdAt;
+
+    const normalized = {
+        ...task,
+        name: task.name?.trim() || 'Untitled item',
+        description: task.description || '',
+        logs: Array.isArray(task.logs) ? task.logs : [],
+        elapsedMs: Number.isFinite(task.elapsedMs) ? task.elapsedMs : 0,
+        isRunning: false,
+        isArchived: Boolean(task.isArchived),
+        createdAt,
+        lastUpdatedMs,
+        lastChecked: task.lastChecked ?? null,
+    };
+
+    delete normalized.startedAt;
+    return normalized;
+}
+
+function calculateDuplicates(tasks) {
+    const nameCounts = new Map();
+    const referenceCounts = new Map();
+
+    tasks.forEach((task) => {
+        const nameKey = typeof task.name === 'string' ? task.name.trim().toLowerCase() : '';
+        const referenceKey = typeof task.reference === 'string' ? task.reference.trim().toLowerCase() : '';
+
+        if (nameKey) nameCounts.set(nameKey, (nameCounts.get(nameKey) || 0) + 1);
+        if (referenceKey) referenceCounts.set(referenceKey, (referenceCounts.get(referenceKey) || 0) + 1);
+    });
+
+    return {
+        names: new Set([...nameCounts.entries()].filter(([, count]) => count > 1).map(([key]) => key)),
+        references: new Set([...referenceCounts.entries()].filter(([, count]) => count > 1).map(([key]) => key)),
+    };
+}
+
+function isToday(timestamp) {
+    if (!timestamp) return false;
+    const date = new Date(timestamp);
+    const now = new Date();
+    return date.toDateString() === now.toDateString();
+}
+
+function formatLastUpdated(task) {
+    if (!task.lastUpdatedMs) return 'No updates yet';
+    const date = new Date(task.lastUpdatedMs);
+    const formatted = `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    return `Last update: ${formatted}`;
+}
 
 async function fetchJson(path, fallback) {
     try {
@@ -77,12 +135,12 @@ async function bootstrapApp() {
     Object.assign(state.bootstrap, bootstrap);
 
     const existing = loadFromStorage();
-    state.tasks = existing?.tasks?.length ? existing.tasks : structuredClone(state.bootstrap.tasks);
-
-    state.tasks.forEach((task) => (task.isRunning = false));
+    const seededTasks = existing?.tasks?.length ? existing.tasks : structuredClone(state.bootstrap.tasks);
+    state.tasks = seededTasks.map(normalizeTask);
 
     render();
     attachEvents();
+    updateDuplicateHints();
 }
 
 function loadFromStorage() {
@@ -111,9 +169,17 @@ function nextTaskCode() {
 
 function attachEvents() {
     const form = document.getElementById('taskForm');
+    const nameInput = form.elements.name;
+    const referenceInput = form.elements.reference;
+
+    [nameInput, referenceInput].forEach((input) => {
+        input.addEventListener('input', updateDuplicateHints);
+    });
+
     form.addEventListener('change', (event) => {
         if (event.target.name === 'itemType') {
             toggleFormFields(event.target.value);
+            updateDuplicateHints();
         }
     });
 
@@ -132,7 +198,8 @@ function attachEvents() {
             return;
         }
 
-        const task = {
+        const now = Date.now();
+        const task = normalizeTask({
             id: crypto.randomUUID(),
             type,
             name,
@@ -143,17 +210,27 @@ function attachEvents() {
             logs: [],
             isRunning: false,
             lastLog: null,
-        };
+            createdAt: now,
+            lastUpdatedMs: now,
+            lastChecked: null,
+        });
 
         state.tasks.unshift(task);
         persist();
         render();
         form.reset();
         toggleFormFields('project');
+        updateDuplicateHints();
     });
 
     document.getElementById('filterType').addEventListener('change', render);
     document.getElementById('filterCritical').addEventListener('change', render);
+    document.getElementById('filterArchived').addEventListener('change', render);
+    document.getElementById('sortBy').addEventListener('change', render);
+
+    form.addEventListener('reset', () => {
+        setTimeout(() => updateDuplicateHints(), 0);
+    });
 
     const dialog = document.getElementById('logDialog');
     const logForm = document.getElementById('logForm');
@@ -178,6 +255,7 @@ function attachEvents() {
         if (task) {
             task.isRunning = false;
             task.lastLog = 'Discarded session';
+            task.lastUpdatedMs = Date.now();
         }
         state.pendingLog = null;
         persist();
@@ -199,16 +277,41 @@ function toggleFormFields(type) {
     }
 }
 
+function updateDuplicateHints() {
+    const form = document.getElementById('taskForm');
+    if (!form) return;
+
+    const type = form.elements.itemType.value;
+    const name = form.elements.name.value.trim().toLowerCase();
+    const reference = form.elements.reference.value.trim().toLowerCase();
+
+    const { names, references } = calculateDuplicates(state.tasks);
+
+    const nameNote = document.getElementById('duplicateNameNote');
+    const isNameDuplicate = !!name && names.has(name);
+    nameNote.hidden = !isNameDuplicate;
+    nameNote.textContent = isNameDuplicate ? 'A project or task already uses this title.' : '';
+    nameNote.classList.toggle('warning', isNameDuplicate);
+
+    const refNote = document.getElementById('duplicateReferenceNote');
+    const shouldCheckReference = type === 'project';
+    const isRefDuplicate = shouldCheckReference && !!reference && references.has(reference);
+    refNote.hidden = !isRefDuplicate;
+    refNote.textContent = isRefDuplicate ? 'This reference number already exists.' : '';
+    refNote.classList.toggle('warning', isRefDuplicate);
+}
+
 function render() {
     renderStats();
     renderTable();
 }
 
 function renderStats() {
-    const running = state.tasks.filter((task) => task.isRunning).length;
-    const projects = state.tasks.filter((task) => task.type === 'project').length;
-    const tasks = state.tasks.filter((task) => task.type === 'task').length;
-    const hours = state.tasks.reduce((total, task) => total + task.elapsedMs, 0);
+    const activeTasks = state.tasks.filter((task) => !task.isArchived);
+    const running = activeTasks.filter((task) => task.isRunning).length;
+    const projects = activeTasks.filter((task) => task.type === 'project').length;
+    const tasks = activeTasks.filter((task) => task.type === 'task').length;
+    const hours = activeTasks.reduce((total, task) => total + task.elapsedMs + currentRunTime(task), 0);
 
     document.querySelector('[data-stat="running"]').textContent = running;
     document.querySelector('[data-stat="projects"]').textContent = projects;
@@ -222,12 +325,21 @@ function renderTable() {
 
     const filterType = document.getElementById('filterType').value;
     const filterCritical = document.getElementById('filterCritical').value;
+    const filterArchived = document.getElementById('filterArchived').value;
+    const sortBy = document.getElementById('sortBy').value;
+
+    const duplicates = calculateDuplicates(state.tasks);
 
     const filtered = state.tasks.filter((task) => {
         const typeMatch = filterType === 'all' || task.type === filterType;
         const criticalMatch = filterCritical === 'all' || (filterCritical === 'critical' ? task.isCritical : !task.isCritical);
-        return typeMatch && criticalMatch;
+        const archiveMatch =
+            filterArchived === 'all'
+                || (filterArchived === 'archived' ? task.isArchived : !task.isArchived);
+        return typeMatch && criticalMatch && archiveMatch;
     });
+
+    const sorted = [...filtered].sort((a, b) => sortTasks(a, b, sortBy));
 
     if (!filtered.length) {
         container.innerHTML = '<div class="empty-state">No items yet. Use the form above to add your first task.</div>';
@@ -236,10 +348,11 @@ function renderTable() {
 
     const template = document.getElementById('taskRowTemplate');
 
-    filtered.forEach((task) => {
+    sorted.forEach((task) => {
         const clone = template.content.cloneNode(true);
         const row = clone.querySelector('.task-row');
         row.dataset.id = task.id;
+        row.classList.toggle('archived', task.isArchived);
         row.querySelector('[data-field="type"]').textContent = task.type.toUpperCase();
         row.querySelector('[data-field="name"]').textContent = task.name;
         row.querySelector('[data-field="reference"]').textContent = task.reference;
@@ -247,9 +360,27 @@ function renderTable() {
         const criticalChip = row.querySelector('[data-field="critical"]');
         criticalChip.dataset.critical = task.isCritical;
         criticalChip.textContent = task.isCritical ? 'Critical' : 'Normal';
-        row.querySelector('[data-field="status"]').textContent = task.isRunning ? 'In progress' : 'Idle';
+        row.querySelector('[data-field="status"]').textContent = task.isArchived ? 'Archived' : task.isRunning ? 'In progress' : 'Idle';
         row.querySelector('[data-field="elapsed"]').textContent = formatDuration(task.elapsedMs + currentRunTime(task));
         row.querySelector('[data-field="lastLog"]').textContent = task.lastLog || 'No logs yet';
+        row.querySelector('[data-field="lastUpdated"]').textContent = formatLastUpdated(task);
+
+        const duplicateNameChip = row.querySelector('[data-field="duplicateName"]');
+        const duplicateReferenceChip = row.querySelector('[data-field="duplicateReference"]');
+        const nameKey = task.name.trim().toLowerCase();
+        const refKey = task.reference?.trim().toLowerCase();
+        const isDuplicateName = !!nameKey && duplicates.names.has(nameKey);
+        const isDuplicateRef = !!refKey && duplicates.references.has(refKey);
+        duplicateNameChip.hidden = !isDuplicateName;
+        duplicateReferenceChip.hidden = !isDuplicateRef;
+
+        const checkedChip = row.querySelector('[data-field="checked"]');
+        const checkedToday = isToday(task.lastChecked);
+        checkedChip.textContent = checkedToday ? 'Checked today' : 'Not checked today';
+        checkedChip.classList.toggle('stale', !checkedToday);
+
+        const archivedChip = row.querySelector('[data-field="archived"]');
+        archivedChip.hidden = !task.isArchived;
 
         const logsContainer = row.querySelector('.task-logs ul');
         task.logs.forEach((log) => {
@@ -265,7 +396,7 @@ function renderTable() {
 
         const startBtn = row.querySelector('[data-action="start"]');
         const stopBtn = row.querySelector('[data-action="stop"]');
-        startBtn.disabled = task.isRunning;
+        startBtn.disabled = task.isRunning || task.isArchived;
         stopBtn.disabled = !task.isRunning;
 
         startBtn.addEventListener('click', () => startTimer(task.id));
@@ -273,16 +404,30 @@ function renderTable() {
 
         row.querySelector('[data-action="export"]').addEventListener('click', () => exportTask(task));
 
+        const checkBtn = row.querySelector('[data-action="check"]');
+        checkBtn.textContent = checkedToday ? 'Checked' : 'Mark checked';
+        checkBtn.disabled = checkedToday || task.isArchived;
+        checkBtn.addEventListener('click', () => markChecked(task.id));
+
+        const archiveBtn = row.querySelector('[data-action="archive"]');
+        archiveBtn.textContent = task.isArchived ? 'Restore' : 'Archive';
+        archiveBtn.disabled = task.isRunning;
+        archiveBtn.addEventListener('click', () => archiveTask(task.id));
+
+        const deleteBtn = row.querySelector('[data-action="delete"]');
+        deleteBtn.addEventListener('click', () => deleteTask(task.id));
+
         container.appendChild(clone);
     });
 }
 
 function startTimer(id) {
     const task = state.tasks.find((t) => t.id === id);
-    if (!task || task.isRunning) return;
+    if (!task || task.isRunning || task.isArchived) return;
 
     task.isRunning = true;
     task.startedAt = Date.now();
+    task.lastUpdatedMs = Date.now();
 
     if (state.timers.has(id)) {
         clearInterval(state.timers.get(id));
@@ -307,6 +452,7 @@ function stopTimer(id) {
 
     task.isRunning = false;
     delete task.startedAt;
+    task.lastUpdatedMs = Date.now();
 
     state.pendingLog = { id: task.id, duration };
     const dialog = document.getElementById('logDialog');
@@ -327,10 +473,61 @@ function finalizeLog(comment) {
         date: new Date().toLocaleDateString(),
         duration: formatDuration(duration),
         comment,
+        timestamp: Date.now(),
     };
     task.logs.unshift(entry);
     task.lastLog = `${entry.date} · ${entry.duration}`;
+    task.lastUpdatedMs = entry.timestamp;
+    task.lastChecked = entry.timestamp;
     state.pendingLog = null;
+    persist();
+    render();
+}
+
+function markChecked(id) {
+    const task = state.tasks.find((t) => t.id === id);
+    if (!task) return;
+
+    const now = Date.now();
+    task.lastChecked = now;
+    task.lastUpdatedMs = Math.max(task.lastUpdatedMs || 0, now);
+    persist();
+    render();
+}
+
+function archiveTask(id) {
+    const task = state.tasks.find((t) => t.id === id);
+    if (!task) return;
+    if (task.isRunning) {
+        alert('Stop the timer before archiving this item.');
+        return;
+    }
+
+    task.isArchived = !task.isArchived;
+    task.lastUpdatedMs = Date.now();
+    persist();
+    render();
+}
+
+function deleteTask(id) {
+    const index = state.tasks.findIndex((t) => t.id === id);
+    if (index === -1) return;
+
+    const task = state.tasks[index];
+    if (task.isRunning) {
+        alert('Stop the timer before deleting this item.');
+        return;
+    }
+
+    const confirmDelete = confirm('This will remove the task and its logs. Continue?');
+    if (!confirmDelete) return;
+
+    if (state.timers.has(id)) {
+        clearInterval(state.timers.get(id));
+        state.timers.delete(id);
+    }
+
+    state.tasks.splice(index, 1);
     persist();
     render();
 }
@@ -367,6 +564,20 @@ function formatHours(ms) {
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
     return `${hours}h ${minutes.toString().padStart(2, '0')}m`;
+}
+
+function sortTasks(a, b, sortBy) {
+    switch (sortBy) {
+        case 'critical':
+            return Number(b.isCritical) - Number(a.isCritical) || (b.lastUpdatedMs || 0) - (a.lastUpdatedMs || 0);
+        case 'type':
+            return a.type.localeCompare(b.type) || (b.lastUpdatedMs || 0) - (a.lastUpdatedMs || 0);
+        case 'name':
+            return a.name.localeCompare(b.name);
+        case 'recent':
+        default:
+            return (b.lastUpdatedMs || 0) - (a.lastUpdatedMs || 0);
+    }
 }
 
 function exportTask(task) {

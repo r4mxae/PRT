@@ -7,9 +7,13 @@
       "reference": "PRJ-900",
       "description": "Map deliverables, owners, and deadlines.",
       "isCritical": true,
+      "isArchived": false,
       "elapsedMs": 0,
       "logs": [],
-      "lastLog": null
+      "lastLog": null,
+      "createdAt": 1704067200000,
+      "lastUpdatedMs": 1704067200000,
+      "lastChecked": null
     },
     {
       "id": "demo-task",
@@ -18,9 +22,13 @@
       "reference": "Task #001",
       "description": "Provide a one page overview for the team.",
       "isCritical": false,
+      "isArchived": false,
       "elapsedMs": 0,
       "logs": [],
-      "lastLog": null
+      "lastLog": null,
+      "createdAt": 1704067200000,
+      "lastUpdatedMs": 1704067200000,
+      "lastChecked": null
     }
   ]
 }
