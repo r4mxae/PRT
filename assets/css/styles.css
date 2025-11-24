@@ -297,6 +297,12 @@ button.warn {
     color: var(--danger);
 }
 
+.chip.archived {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--muted);
+    border: 1px dashed rgba(255, 255, 255, 0.2);
+}
+
 .task-time {
     display: flex;
     flex-direction: column;
@@ -316,6 +322,12 @@ button.warn {
 .task-actions {
     display: grid;
     gap: 0.4rem;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+}
+
+.task-row.archived {
+    opacity: 0.8;
+    border-style: dashed;
 }
 
 .task-logs {

@@ -42,6 +42,7 @@ const defaultData = {
                 elapsedMs: 0,
                 logs: [],
                 isRunning: false,
+                isArchived: false,
                 lastLog: null,
                 createdAt: Date.now(),
                 lastUpdatedMs: Date.now(),
@@ -63,6 +64,7 @@ function normalizeTask(task) {
         logs: Array.isArray(task.logs) ? task.logs : [],
         elapsedMs: Number.isFinite(task.elapsedMs) ? task.elapsedMs : 0,
         isRunning: false,
+        isArchived: Boolean(task.isArchived),
         createdAt,
         lastUpdatedMs,
         lastChecked: task.lastChecked ?? null,
@@ -223,6 +225,7 @@ function attachEvents() {
 
     document.getElementById('filterType').addEventListener('change', render);
     document.getElementById('filterCritical').addEventListener('change', render);
+    document.getElementById('filterArchived').addEventListener('change', render);
     document.getElementById('sortBy').addEventListener('change', render);
 
     form.addEventListener('reset', () => {
@@ -304,10 +307,11 @@ function render() {
 }
 
 function renderStats() {
-    const running = state.tasks.filter((task) => task.isRunning).length;
-    const projects = state.tasks.filter((task) => task.type === 'project').length;
-    const tasks = state.tasks.filter((task) => task.type === 'task').length;
-    const hours = state.tasks.reduce((total, task) => total + task.elapsedMs + currentRunTime(task), 0);
+    const activeTasks = state.tasks.filter((task) => !task.isArchived);
+    const running = activeTasks.filter((task) => task.isRunning).length;
+    const projects = activeTasks.filter((task) => task.type === 'project').length;
+    const tasks = activeTasks.filter((task) => task.type === 'task').length;
+    const hours = activeTasks.reduce((total, task) => total + task.elapsedMs + currentRunTime(task), 0);
 
     document.querySelector('[data-stat="running"]').textContent = running;
     document.querySelector('[data-stat="projects"]').textContent = projects;
@@ -321,6 +325,7 @@ function renderTable() {
 
     const filterType = document.getElementById('filterType').value;
     const filterCritical = document.getElementById('filterCritical').value;
+    const filterArchived = document.getElementById('filterArchived').value;
     const sortBy = document.getElementById('sortBy').value;
 
     const duplicates = calculateDuplicates(state.tasks);
@@ -328,7 +333,10 @@ function renderTable() {
     const filtered = state.tasks.filter((task) => {
         const typeMatch = filterType === 'all' || task.type === filterType;
         const criticalMatch = filterCritical === 'all' || (filterCritical === 'critical' ? task.isCritical : !task.isCritical);
-        return typeMatch && criticalMatch;
+        const archiveMatch =
+            filterArchived === 'all'
+                || (filterArchived === 'archived' ? task.isArchived : !task.isArchived);
+        return typeMatch && criticalMatch && archiveMatch;
     });
 
     const sorted = [...filtered].sort((a, b) => sortTasks(a, b, sortBy));
@@ -344,6 +352,7 @@ function renderTable() {
         const clone = template.content.cloneNode(true);
         const row = clone.querySelector('.task-row');
         row.dataset.id = task.id;
+        row.classList.toggle('archived', task.isArchived);
         row.querySelector('[data-field="type"]').textContent = task.type.toUpperCase();
         row.querySelector('[data-field="name"]').textContent = task.name;
         row.querySelector('[data-field="reference"]').textContent = task.reference;
@@ -351,7 +360,7 @@ function renderTable() {
         const criticalChip = row.querySelector('[data-field="critical"]');
         criticalChip.dataset.critical = task.isCritical;
         criticalChip.textContent = task.isCritical ? 'Critical' : 'Normal';
-        row.querySelector('[data-field="status"]').textContent = task.isRunning ? 'In progress' : 'Idle';
+        row.querySelector('[data-field="status"]').textContent = task.isArchived ? 'Archived' : task.isRunning ? 'In progress' : 'Idle';
         row.querySelector('[data-field="elapsed"]').textContent = formatDuration(task.elapsedMs + currentRunTime(task));
         row.querySelector('[data-field="lastLog"]').textContent = task.lastLog || 'No logs yet';
         row.querySelector('[data-field="lastUpdated"]').textContent = formatLastUpdated(task);
@@ -370,6 +379,9 @@ function renderTable() {
         checkedChip.textContent = checkedToday ? 'Checked today' : 'Not checked today';
         checkedChip.classList.toggle('stale', !checkedToday);
 
+        const archivedChip = row.querySelector('[data-field="archived"]');
+        archivedChip.hidden = !task.isArchived;
+
         const logsContainer = row.querySelector('.task-logs ul');
         task.logs.forEach((log) => {
             const li = document.createElement('li');
@@ -384,7 +396,7 @@ function renderTable() {
 
         const startBtn = row.querySelector('[data-action="start"]');
         const stopBtn = row.querySelector('[data-action="stop"]');
-        startBtn.disabled = task.isRunning;
+        startBtn.disabled = task.isRunning || task.isArchived;
         stopBtn.disabled = !task.isRunning;
 
         startBtn.addEventListener('click', () => startTimer(task.id));
@@ -394,8 +406,16 @@ function renderTable() {
 
         const checkBtn = row.querySelector('[data-action="check"]');
         checkBtn.textContent = checkedToday ? 'Checked' : 'Mark checked';
-        checkBtn.disabled = checkedToday;
+        checkBtn.disabled = checkedToday || task.isArchived;
         checkBtn.addEventListener('click', () => markChecked(task.id));
+
+        const archiveBtn = row.querySelector('[data-action="archive"]');
+        archiveBtn.textContent = task.isArchived ? 'Restore' : 'Archive';
+        archiveBtn.disabled = task.isRunning;
+        archiveBtn.addEventListener('click', () => archiveTask(task.id));
+
+        const deleteBtn = row.querySelector('[data-action="delete"]');
+        deleteBtn.addEventListener('click', () => deleteTask(task.id));
 
         container.appendChild(clone);
     });
@@ -403,7 +423,7 @@ function renderTable() {
 
 function startTimer(id) {
     const task = state.tasks.find((t) => t.id === id);
-    if (!task || task.isRunning) return;
+    if (!task || task.isRunning || task.isArchived) return;
 
     task.isRunning = true;
     task.startedAt = Date.now();
@@ -458,6 +478,7 @@ function finalizeLog(comment) {
     task.logs.unshift(entry);
     task.lastLog = `${entry.date} · ${entry.duration}`;
     task.lastUpdatedMs = entry.timestamp;
+    task.lastChecked = entry.timestamp;
     state.pendingLog = null;
     persist();
     render();
@@ -470,6 +491,43 @@ function markChecked(id) {
     const now = Date.now();
     task.lastChecked = now;
     task.lastUpdatedMs = Math.max(task.lastUpdatedMs || 0, now);
+    persist();
+    render();
+}
+
+function archiveTask(id) {
+    const task = state.tasks.find((t) => t.id === id);
+    if (!task) return;
+    if (task.isRunning) {
+        alert('Stop the timer before archiving this item.');
+        return;
+    }
+
+    task.isArchived = !task.isArchived;
+    task.lastUpdatedMs = Date.now();
+    persist();
+    render();
+}
+
+function deleteTask(id) {
+    const index = state.tasks.findIndex((t) => t.id === id);
+    if (index === -1) return;
+
+    const task = state.tasks[index];
+    if (task.isRunning) {
+        alert('Stop the timer before deleting this item.');
+        return;
+    }
+
+    const confirmDelete = confirm('This will remove the task and its logs. Continue?');
+    if (!confirmDelete) return;
+
+    if (state.timers.has(id)) {
+        clearInterval(state.timers.get(id));
+        state.timers.delete(id);
+    }
+
+    state.tasks.splice(index, 1);
     persist();
     render();
 }
