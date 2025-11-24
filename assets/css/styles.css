@@ -117,6 +117,16 @@ body {
     font-size: 0.95rem;
 }
 
+.form-note {
+    margin: 0;
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+.form-note.warning {
+    color: #ffb480;
+}
+
 .form-field input,
 .form-field textarea,
 select {
@@ -216,6 +226,7 @@ button.warn {
 .filters {
     display: flex;
     gap: 0.5rem;
+    flex-wrap: wrap;
 }
 
 .table {
@@ -270,11 +281,31 @@ button.warn {
     color: #ff9db1;
 }
 
+.chip.duplicate {
+    background: rgba(255, 180, 128, 0.15);
+    color: #ffc285;
+    border: 1px dashed rgba(255, 180, 128, 0.5);
+}
+
+.chip.review {
+    background: rgba(74, 215, 209, 0.12);
+    color: var(--accent);
+}
+
+.chip.review.stale {
+    background: rgba(255, 155, 115, 0.12);
+    color: var(--danger);
+}
+
 .task-time {
     display: flex;
     flex-direction: column;
     justify-content: center;
     gap: 0.25rem;
+}
+
+.task-time small {
+    color: var(--muted);
 }
 
 .task-time .time {

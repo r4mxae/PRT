@@ -9,7 +9,10 @@
       "isCritical": true,
       "elapsedMs": 0,
       "logs": [],
-      "lastLog": null
+      "lastLog": null,
+      "createdAt": 1704067200000,
+      "lastUpdatedMs": 1704067200000,
+      "lastChecked": null
     },
     {
       "id": "demo-task",
@@ -20,7 +23,10 @@
       "isCritical": false,
       "elapsedMs": 0,
       "logs": [],
-      "lastLog": null
+      "lastLog": null,
+      "createdAt": 1704067200000,
+      "lastUpdatedMs": 1704067200000,
+      "lastChecked": null
     }
   ]
 }
